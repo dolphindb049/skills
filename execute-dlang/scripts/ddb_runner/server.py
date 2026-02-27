@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#     "dolphindb",
+#     "python-dotenv",
+# ]
+# ///
 import dolphindb as ddb
 import socket
 import sys

@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#     "dolphindb",
+#     "python-dotenv",
+# ]
+# ///
 # execute.py
 import sys
 import os
@@ -88,15 +95,16 @@ def run_via_server(code_str):
         print(f"⚠️ Server connection error: {e}")
         return False
 
-def run_code(session, code_str, print_output=True):
+def run_code(session, code_str, print_output=True, use_server=False):
     """Execute a raw code string."""
-    # Try server first if session is None (meaning we didn't connect locally yet)
-    if session is None:
+    if use_server:
         if run_via_server(code_str):
             return "Executed via server"
             
         # Fallback to local connection if server failed
         print("⚠️ Persistent server not found. Falling back to new session.")
+        
+    if session is None:
         session = connect_ddb()
         if not session:
             return None
@@ -115,7 +123,7 @@ def run_code(session, code_str, print_output=True):
         print(f"❌ Code Execution Failed: {e}")
         return None
 
-def run_dos_file(session, file_path):
+def run_dos_file(session, file_path, use_server=False):
     """Read and execute a .dos file."""
     if not os.path.exists(file_path):
         print(f"❌ File not found: {file_path}")
@@ -126,7 +134,7 @@ def run_dos_file(session, file_path):
             script_content = f.read()
             
         print(f"Executing file: {file_path}")
-        return run_code(session, script_content)
+        return run_code(session, script_content, use_server=use_server)
     except Exception as e:
         print(f"❌ File Execution Failed: {e}")
         return None
@@ -135,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser(description="DolphinDB Script Executor")
     parser.add_argument("file", nargs="?", help="Path to .dos or .txt script file")
     parser.add_argument("-c", "--code", help="Direct code string to execute")
-    parser.add_argument("--new-session", action="store_true", help="Force new session (bypass server)")
+    parser.add_argument("--use-server", action="store_true", help="Use persistent server session")
     
     args = parser.parse_args()
     
@@ -145,12 +153,15 @@ def main():
         sys.exit(1)
 
     session = None
-    if args.new_session:
+    if not args.use_server:
         session = connect_ddb()
         if not session:
             sys.exit(1)
+            
     if args.file:
-        run_dos_file(session, args.file)
+        run_dos_file(session, args.file, use_server=args.use_server)
+    elif args.code:
+        run_code(session, args.code, use_server=args.use_server)
 
 if __name__ == "__main__":
     main()

@@ -34,6 +34,9 @@ graph LR
 ## 🚀 快速上手 Guide
 
 ### 1. 环境准备
+本工具支持使用 `uv` 极简执行（脚本内已包含依赖声明，无需手动安装包）。
+如果你没有安装 `uv`，请先安装：`pip install uv`。
+
 修改 `scripts/ddb_runner/.env` ，确保包含正确的数据库连接信息：
 ```ini
 DDB_HOST=ip_address
@@ -42,36 +45,38 @@ DDB_USER=admin
 DDB_PASSWORD=123456
 ```
 
-### 2. 启动持久化服务 (推荐)
-在单独的终端中运行：
-```powershell
-# 启动服务端（建议挂在后台或单独的 Terminal tab）
-python scripts/ddb_runner/server.py
-```
-> **成功标志**: 看到 `Server listening on 127.0.0.1:65432`。此时它已连接到 DDB 并准备就绪。
-
-### 3. 执行脚本 (Client)
-在主工作终端中，使用 `execute.py` 发送代码：
+### 2. 执行脚本 (Client)
+在主工作终端中，使用 `uv run` 发送代码（默认每次执行创建新会话）：
 
 **方式 A: 执行文件 (.dos)**
 ```powershell
-python scripts/ddb_runner/execute.py scripts/my_script.dos
+uv run scripts/ddb_runner/execute.py scripts/my_script.dos
 ```
 
 **方式 B: 执行代码片段**
 ```powershell
-# 定义一个变量
-python scripts/ddb_runner/execute.py -c "x = 1..100; y = x * 2;"
-
-# 在下一次执行中调用该变量（因为 Session 是持久的）
-python scripts/ddb_runner/execute.py -c "avg(y)"
-# 输出: 101
+uv run scripts/ddb_runner/execute.py -c "x = 1..100; y = x * 2; avg(y)"
 ```
 
-**方式 C: 强制新会话 (不使用 Server)**
-如果你想在一个干净的环境中运行，不依赖后台 Server：
+### 3. 使用持久化会话 (Server)
+如果你想保留变量和上下文，需要先启动 Server，然后使用 `--use-server` 参数：
+
+**步骤 1: 启动服务端**
+在单独的终端中运行：
 ```powershell
-python scripts/ddb_runner/execute.py scripts/my_script.dos --new-session
+# 启动服务端（建议挂在后台或单独的 Terminal tab）
+uv run scripts/ddb_runner/server.py
+```
+> **成功标志**: 看到 `Server listening on 127.0.0.1:65432`。此时它已连接到 DDB 并准备就绪。
+
+**步骤 2: 使用 `--use-server` 执行**
+```powershell
+# 定义一个变量
+uv run scripts/ddb_runner/execute.py -c "x = 1..100; y = x * 2;" --use-server
+
+# 在下一次执行中调用该变量（因为 Session 是持久的）
+uv run scripts/ddb_runner/execute.py -c "avg(y)" --use-server
+# 输出: 101
 ```
 
 ---
