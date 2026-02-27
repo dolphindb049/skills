@@ -16,12 +16,16 @@ try:
     import dolphindb as ddb
     from dotenv import load_dotenv
 except ImportError as e:
-    print(f"❌ Error: Missing required package '{e.name}'.", file=sys.stderr)
+    print(f"[Error] Missing required package '{e.name}'.", file=sys.stderr)
     print("Please install dependencies: pip install dolphindb python-dotenv", file=sys.stderr)
     sys.exit(1)
 
-def load_config():
-    """Load configuration from .env files or environment variables."""
+def load_config(args):
+    """Load configuration from args, .env files or environment variables."""
+    # 0. Try loading from args first
+    if args.host and args.port:
+        return args.host, int(args.port), args.user, args.password
+
     # 1. Try loading from current directory .env
     current_dir = os.path.dirname(os.path.abspath(__file__))
     dotenv_path = os.path.join(current_dir, ".env")
@@ -41,28 +45,26 @@ def load_config():
     password = os.getenv("DDB_PASSWORD") or os.getenv("DDB_PASS", "123456")
     
     if not host or not port:
-        print("❌ Error: DDB_HOST and DDB_PORT must be set in .env file or environment variables.")
+        print("[Error] DDB_HOST and DDB_PORT must be set via arguments, .env file or environment variables.")
         sys.exit(1)
         
     return host, int(port), user, password
 
-def connect_ddb():
+def connect_ddb(args):
     """Connect to DolphinDB and return the session object."""
     try:
-        host, port, user, password = load_config()
+        host, port, user, password = load_config(args)
     except SystemExit:
         return None
         
-    # print(f"🔌 Connecting to {host}:{port}...")
-    print(f"🔌 Connecting to {host}:{port}...")
+    print(f"[Info] Connecting to {host}:{port}...")
     try:
         s = ddb.session()
         s.connect(host, port, user, password)
-        # print(f"✅ Connected to {host}:{port}")
-        print(f"✅ Connected to {host}:{port}")
+        print(f"[Success] Connected to {host}:{port}")
         return s
     except Exception as e:
-        print(f"❌ Connection Failed: {e}")
+        print(f"[Error] Connection Failed: {e}")
         return None
 
 def run_via_server(code_str):
@@ -84,7 +86,7 @@ def run_via_server(code_str):
                     break
                 data += chunk
             
-            print("✅ Execution Successful (via Server)")
+            print("[Success] Execution Successful (via Server)")
             print("--- Result ---")
             print(data.decode('utf-8'))
             print("--------------")
@@ -92,20 +94,20 @@ def run_via_server(code_str):
     except (ConnectionRefusedError, socket.timeout):
         return False
     except Exception as e:
-        print(f"⚠️ Server connection error: {e}")
+        print(f"[Warning] Server connection error: {e}")
         return False
 
-def run_code(session, code_str, print_output=True, use_server=False):
+def run_code(session, code_str, args, print_output=True, use_server=False):
     """Execute a raw code string."""
     if use_server:
         if run_via_server(code_str):
             return "Executed via server"
             
         # Fallback to local connection if server failed
-        print("⚠️ Persistent server not found. Falling back to new session.")
+        print("[Warning] Persistent server not found. Falling back to new session.")
         
     if session is None:
-        session = connect_ddb()
+        session = connect_ddb(args)
         if not session:
             return None
 
@@ -114,19 +116,19 @@ def run_code(session, code_str, print_output=True, use_server=False):
             print(f"Executing code snippet...")
         result = session.run(code_str)
         if print_output:
-            print("✅ Execution Successful")
+            print("[Success] Execution Successful")
             print("--- Result ---")
             print(result)
             print("--------------")
         return result
     except Exception as e:
-        print(f"❌ Code Execution Failed: {e}")
+        print(f"[Error] Code Execution Failed: {e}")
         return None
 
-def run_dos_file(session, file_path, use_server=False):
+def run_dos_file(session, file_path, args, use_server=False):
     """Read and execute a .dos file."""
     if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
+        print(f"[Error] File not found: {file_path}")
         return None
         
     try:
@@ -134,9 +136,9 @@ def run_dos_file(session, file_path, use_server=False):
             script_content = f.read()
             
         print(f"Executing file: {file_path}")
-        return run_code(session, script_content, use_server=use_server)
+        return run_code(session, script_content, args, use_server=use_server)
     except Exception as e:
-        print(f"❌ File Execution Failed: {e}")
+        print(f"[Error] File Execution Failed: {e}")
         return None
 
 def main():
@@ -144,6 +146,10 @@ def main():
     parser.add_argument("file", nargs="?", help="Path to .dos or .txt script file")
     parser.add_argument("-c", "--code", help="Direct code string to execute")
     parser.add_argument("--use-server", action="store_true", help="Use persistent server session")
+    parser.add_argument("--host", help="DolphinDB host address")
+    parser.add_argument("--port", help="DolphinDB port")
+    parser.add_argument("--user", default="admin", help="DolphinDB username")
+    parser.add_argument("--password", default="123456", help="DolphinDB password")
     
     args = parser.parse_args()
     
@@ -154,14 +160,14 @@ def main():
 
     session = None
     if not args.use_server:
-        session = connect_ddb()
+        session = connect_ddb(args)
         if not session:
             sys.exit(1)
             
     if args.file:
-        run_dos_file(session, args.file, use_server=args.use_server)
+        run_dos_file(session, args.file, args, use_server=args.use_server)
     elif args.code:
-        run_code(session, args.code, use_server=args.use_server)
+        run_code(session, args.code, args, use_server=args.use_server)
 
 if __name__ == "__main__":
     main()

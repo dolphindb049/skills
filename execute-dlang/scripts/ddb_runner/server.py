@@ -11,6 +11,8 @@ import sys
 import os
 from dotenv import load_dotenv
 
+import argparse
+
 # Load config
 current_dir = os.path.dirname(os.path.abspath(__file__))
 # Check for .env in parent directories
@@ -21,30 +23,33 @@ if os.path.exists(dotenv_path):
 HOST = '127.0.0.1'
 PORT = 65432  # Port to listen on (non-privileged ports are > 1023)
 
-def load_ddb_config():
+def load_ddb_config(args):
+    if args.host and args.port:
+        return args.host, int(args.port), args.user, args.password
+        
     ddb_host = os.getenv("DDB_HOST", "192.168.100.43")
     ddb_port = int(os.getenv("DDB_PORT", 7739))
     ddb_user = os.getenv("DDB_USER", "admin")
     ddb_pass = os.getenv("DDB_PASSWORD") or os.getenv("DDB_PASS", "123456")
     return ddb_host, ddb_port, ddb_user, ddb_pass
 
-def start_server():
-    ddb_host, ddb_port, ddb_user, ddb_pass = load_ddb_config()
-    print(f"Connecting to DolphinDB {ddb_host}:{ddb_port}...")
+def start_server(args):
+    ddb_host, ddb_port, ddb_user, ddb_pass = load_ddb_config(args)
+    print(f"[Info] Connecting to DolphinDB {ddb_host}:{ddb_port}...")
     
     try:
         session = ddb.session()
         session.connect(ddb_host, ddb_port, ddb_user, ddb_pass)
-        print("Connected to DolphinDB!")
+        print("[Success] Connected to DolphinDB!")
     except Exception as e:
-        print(f"Failed to connect to DolphinDB: {e}")
+        print(f"[Error] Failed to connect to DolphinDB: {e}")
         return
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.bind((HOST, PORT))
             s.listen()
-            print(f"Server listening on {HOST}:{PORT}")
+            print(f"[Info] Server listening on {HOST}:{PORT}")
             
             while True:
                 conn, addr = s.accept()
@@ -63,7 +68,7 @@ def start_server():
                         continue
                         
                     script = data.decode('utf-8')
-                    print(f"Executing script length: {len(script)}")
+                    print(f"[Info] Executing script length: {len(script)}")
                     
                     try:
                         result = session.run(script)
@@ -74,9 +79,16 @@ def start_server():
                         conn.sendall(error_msg.encode('utf-8'))
         except OSError as e:
             if e.errno == 10048: # Address already in use
-                print(f"Port {PORT} is already in use. Server might be running.")
+                print(f"[Error] Port {PORT} is already in use. Server might be running.")
             else:
-                print(f"Socket error: {e}")
+                print(f"[Error] Socket error: {e}")
 
 if __name__ == "__main__":
-    start_server()
+    parser = argparse.ArgumentParser(description="DolphinDB Persistent Server")
+    parser.add_argument("--host", help="DolphinDB host address")
+    parser.add_argument("--port", help="DolphinDB port")
+    parser.add_argument("--user", default="admin", help="DolphinDB username")
+    parser.add_argument("--password", default="123456", help="DolphinDB password")
+    args = parser.parse_args()
+    
+    start_server(args)

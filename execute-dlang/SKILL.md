@@ -1,6 +1,6 @@
 ---
 name: execute-dlang
-description: 专注于 DolphinDB 脚本执行与调试的技能包。包含命令行执行器和持久化会话服务端，支持保留上下文的交互式开发。
+description: 专注于 DolphinDB 脚本执行的技能。当用户提到“执行 DolphinDB 脚本”、“运行 .dos 文件”或“在 Python 中执行 DDB 代码”时，触发此技能。提供一个基于 Python 的执行环境，支持持久化会话（Persistent Session），让用户能够分步骤执行代码并保留变量定义。
 license: MIT
 metadata:
   author: ddb-user
@@ -9,7 +9,7 @@ metadata:
 
 # DolphinDB 执行器 (Script Analysis & Persistence)
 
-本技能包提供了一套基于 Python 的 DolphinDB 执行环境，核心特色是支持 **持久化会话 (Persistent Session)**。这意味着你可以像在 GUI 客户端中一样，分步骤执行代码，变量和函数定义会保留在内存中。
+本技能包提供了一套基于 Python 的 DolphinDB 执行环境，你可以直接执行dolphindb脚本文件（.dos）或代码片段，或者持久化会话，让你在多次执行中保留变量和函数定义。
 
 ## 🏗️ 核心架构
 
@@ -37,7 +37,7 @@ graph LR
 本工具支持使用 `uv` 极简执行（脚本内已包含依赖声明，无需手动安装包）。
 如果你没有安装 `uv`，请先安装：`pip install uv`。
 
-修改 `scripts/ddb_runner/.env` ，确保包含正确的数据库连接信息：
+创建并，修改 `scripts/ddb_runner/.env` ，确保包含正确的数据库连接信息：
 ```ini
 DDB_HOST=ip_address
 DDB_PORT=port
@@ -45,7 +45,7 @@ DDB_USER=admin
 DDB_PASSWORD=123456
 ```
 
-### 2. 执行脚本 (Client)
+### 2. 快速执行脚本 (Client)
 在主工作终端中，使用 `uv run` 发送代码（默认每次执行创建新会话）：
 
 **方式 A: 执行文件 (.dos)**
@@ -58,6 +58,12 @@ uv run scripts/ddb_runner/execute.py scripts/my_script.dos
 uv run scripts/ddb_runner/execute.py -c "x = 1..100; y = x * 2; avg(y)"
 ```
 
+**方式 C: 命令行传参连接**
+如果不使用 `.env` 文件，也可以直接通过参数传递连接信息：
+```powershell
+uv run scripts/ddb_runner/execute.py -c "1+1" --host 192.168.1.100 --port 8848 --user admin --password 123456
+```
+
 ### 3. 使用持久化会话 (Server)
 如果你想保留变量和上下文，需要先启动 Server，然后使用 `--use-server` 参数：
 
@@ -66,6 +72,8 @@ uv run scripts/ddb_runner/execute.py -c "x = 1..100; y = x * 2; avg(y)"
 ```powershell
 # 启动服务端（建议挂在后台或单独的 Terminal tab）
 uv run scripts/ddb_runner/server.py
+# 或者通过参数指定连接信息
+uv run scripts/ddb_runner/server.py --host 192.168.1.100 --port 8848
 ```
 > **成功标志**: 看到 `Server listening on 127.0.0.1:65432`。此时它已连接到 DDB 并准备就绪。
 
