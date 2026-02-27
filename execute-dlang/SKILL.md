@@ -7,7 +7,7 @@ metadata:
   version: "3.0.0"
 ---
 
-# DolphinDB 高级执行器 (Script Analysis & Persistence)
+# DolphinDB 执行器 (Script Analysis & Persistence)
 
 本技能包提供了一套基于 Python 的 DolphinDB 执行环境，核心特色是支持 **持久化会话 (Persistent Session)**。这意味着你可以像在 GUI 客户端中一样，分步骤执行代码，变量和函数定义会保留在内存中。
 
@@ -34,10 +34,10 @@ graph LR
 ## 🚀 快速上手 Guide
 
 ### 1. 环境准备
-确保 `scripts/ddb_runner/.env` 包含正确的数据库连接信息：
+修改 `scripts/ddb_runner/.env` ，确保包含正确的数据库连接信息：
 ```ini
-DDB_HOST=192.168.100.43
-DDB_PORT=7739
+DDB_HOST=ip_address
+DDB_PORT=port
 DDB_USER=admin
 DDB_PASSWORD=123456
 ```
