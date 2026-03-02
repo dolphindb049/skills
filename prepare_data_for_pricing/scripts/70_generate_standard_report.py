@@ -9,7 +9,7 @@ import pandas as pd
 from pricing_common import connect_ddb, load_config
 
 
-def _safe_float(series: pd.Series):
+def _safe_float(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce")
 
 
@@ -130,18 +130,18 @@ select * from (
     case2 = session.run(f'select * from loadTable("{cfg.db_path}", "pricing_result_case2") order by pricingDate, ticker')
     data_quality = session.run(
         f'''
-curveDate = exec max(tradeDate) from loadTable("{cfg.db_path}", "raw_irs_curve")
-basketDate = exec max(tradeDate) from loadTable("{cfg.db_path}", "case2_bond_basket")
+curveTradeDate = exec max(tradeDate) from loadTable("{cfg.db_path}", "raw_irs_curve")
+basketTradeDate = exec max(tradeDate) from loadTable("{cfg.db_path}", "case2_bond_basket")
 
-curveRows = exec count(*) from loadTable("{cfg.db_path}", "raw_irs_curve") where tradeDate=curveDate
-curveDistinctDates = size(exec distinct curveDate from loadTable("{cfg.db_path}", "raw_irs_curve") where tradeDate=curveDate)
+curveRows = exec count(*) from loadTable("{cfg.db_path}", "raw_irs_curve") where tradeDate=curveTradeDate
+curveDistinctDates = size(exec distinct curveDate from loadTable("{cfg.db_path}", "raw_irs_curve") where tradeDate=curveTradeDate)
 curveDuplicateRows = curveRows - curveDistinctDates
 
-basketRows = exec count(*) from loadTable("{cfg.db_path}", "case2_bond_basket") where tradeDate=basketDate,couponTypeCD="FIXED"
-basketDistinctMaturity = size(exec distinct maturityDate from loadTable("{cfg.db_path}", "case2_bond_basket") where tradeDate=basketDate,couponTypeCD="FIXED")
+basketRows = exec count(*) from loadTable("{cfg.db_path}", "case2_bond_basket") where tradeDate=basketTradeDate,couponTypeCD="FIXED"
+basketDistinctMaturity = size(exec distinct maturityDate from loadTable("{cfg.db_path}", "case2_bond_basket") where tradeDate=basketTradeDate,couponTypeCD="FIXED")
 basketDuplicateRows = basketRows - basketDistinctMaturity
 
-table(curveDate as curveDate, basketDate as basketDate, curveRows as curveRows, curveDistinctDates as curveDistinctDates, curveDuplicateRows as curveDuplicateRows, basketRows as basketRows, basketDistinctMaturity as basketDistinctMaturity, basketDuplicateRows as basketDuplicateRows)
+table(curveTradeDate as curveDate, basketTradeDate as basketDate, curveRows as curveRows, curveDistinctDates as curveDistinctDates, curveDuplicateRows as curveDuplicateRows, basketRows as basketRows, basketDistinctMaturity as basketDistinctMaturity, basketDuplicateRows as basketDuplicateRows)
 '''
     )
 
