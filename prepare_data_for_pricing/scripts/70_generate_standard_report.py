@@ -45,10 +45,32 @@ def _summary_block(case_df: pd.DataFrame, case_name: str) -> str:
     temp = case_df.copy()
     temp["npv"] = _safe_float(temp["npv"])
     temp["cfetsNetPx"] = _safe_float(temp["cfetsNetPx"])
+    temp = temp.dropna(subset=["npv", "cfetsNetPx"])
+    if temp.empty:
+        return f"### {case_name}\n\n- 结果为空或关键字段缺失。\n"
+
+    temp["signedDiff"] = temp["npv"] - temp["cfetsNetPx"]
     temp["absDiff"] = (temp["npv"] - temp["cfetsNetPx"]).abs()
+    temp["sqDiff"] = temp["signedDiff"] ** 2
+    denom = temp["cfetsNetPx"].abs().replace(0.0, pd.NA)
+    temp["ape"] = (temp["absDiff"] / denom).astype(float)
 
     mae = temp["absDiff"].mean()
+    rmse = temp["sqDiff"].mean() ** 0.5
     p95 = temp["absDiff"].quantile(0.95)
+    mape = temp["ape"].dropna().mean()
+    bias = temp["signedDiff"].mean()
+    hit_01 = (temp["absDiff"] <= 0.1).mean()
+    hit_05 = (temp["absDiff"] <= 0.5).mean()
+    valid_price_ratio = ((temp["npv"] > 0) & (temp["cfetsNetPx"] > 0)).mean()
+
+    delta_msg = "-"
+    if "discountCurveDelta" in temp.columns:
+        delta = _safe_float(temp["discountCurveDelta"]).dropna()
+        if not delta.empty:
+            neg_ratio = (delta < 0).mean()
+            delta_msg = f"负Delta占比: {neg_ratio:.2%}"
+
     max_row = temp.sort_values("absDiff", ascending=False).head(1)
     max_ticker = max_row["ticker"].iloc[0] if not max_row.empty else "-"
     max_diff = max_row["absDiff"].iloc[0] if not max_row.empty else float("nan")
@@ -64,7 +86,14 @@ def _summary_block(case_df: pd.DataFrame, case_name: str) -> str:
         "",
         f"- 样本数: {len(temp)}",
         f"- 平均绝对误差(MAE): {mae:.6f}",
+        f"- 均方根误差(RMSE): {rmse:.6f}",
+        f"- 平均绝对百分误差(MAPE): {mape:.6%}" if pd.notna(mape) else "- 平均绝对百分误差(MAPE): NA",
+        f"- 有符号偏差(Bias): {bias:.6f}",
         f"- 95分位绝对误差(P95): {p95:.6f}",
+        f"- 命中率(|Diff|<=0.1): {hit_01:.2%}",
+        f"- 命中率(|Diff|<=0.5): {hit_05:.2%}",
+        f"- 正价格有效性占比: {valid_price_ratio:.2%}",
+        f"- 风险符号检查: {delta_msg}",
         f"- 最大偏差: {max_ticker} ({max_diff:.6f})",
         "- 偏差Top5:",
         *top_lines,
@@ -99,6 +128,22 @@ select * from (
 
     case1 = session.run(f'select * from loadTable("{cfg.db_path}", "pricing_result_case1") order by pricingDate, ticker')
     case2 = session.run(f'select * from loadTable("{cfg.db_path}", "pricing_result_case2") order by pricingDate, ticker')
+    data_quality = session.run(
+        f'''
+curveDate = exec max(tradeDate) from loadTable("{cfg.db_path}", "raw_irs_curve")
+basketDate = exec max(tradeDate) from loadTable("{cfg.db_path}", "case2_bond_basket")
+
+curveRows = exec count(*) from loadTable("{cfg.db_path}", "raw_irs_curve") where tradeDate=curveDate
+curveDistinctDates = size(exec distinct curveDate from loadTable("{cfg.db_path}", "raw_irs_curve") where tradeDate=curveDate)
+curveDuplicateRows = curveRows - curveDistinctDates
+
+basketRows = exec count(*) from loadTable("{cfg.db_path}", "case2_bond_basket") where tradeDate=basketDate,couponTypeCD="FIXED"
+basketDistinctMaturity = size(exec distinct maturityDate from loadTable("{cfg.db_path}", "case2_bond_basket") where tradeDate=basketDate,couponTypeCD="FIXED")
+basketDuplicateRows = basketRows - basketDistinctMaturity
+
+table(curveDate as curveDate, basketDate as basketDate, curveRows as curveRows, curveDistinctDates as curveDistinctDates, curveDuplicateRows as curveDuplicateRows, basketRows as basketRows, basketDistinctMaturity as basketDistinctMaturity, basketDuplicateRows as basketDuplicateRows)
+'''
+    )
 
     report_dir = Path(__file__).resolve().parents[1] / "reference" / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -115,6 +160,15 @@ select * from (
         for _, row in counts.iterrows():
             table_lines.append(f"- {row['tableName']}: {int(row['rows'])}")
 
+    quality_lines = []
+    if isinstance(data_quality, pd.DataFrame) and not data_quality.empty:
+        row = data_quality.iloc[0]
+        quality_lines = [
+            f"- IRS曲线日期: {row['curveDate']}，原始点数: {int(row['curveRows'])}，唯一期限点: {int(row['curveDistinctDates'])}，重复行: {int(row['curveDuplicateRows'])}",
+            f"- Case2篮子日期: {row['basketDate']}，原始样本: {int(row['basketRows'])}，唯一到期日: {int(row['basketDistinctMaturity'])}，重复行: {int(row['basketDuplicateRows'])}",
+            "- 校验标准: 曲线和篮子应尽量无重复关键点，若重复>0建议先做去重再定价。",
+        ]
+
     content = f"""# 标准化定价报告
 
 - 生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -124,16 +178,19 @@ select * from (
 ## 一、数据准备状态
 {chr(10).join(table_lines) if table_lines else '- 无计数信息'}
 
-## 二、定价结果对照
+## 二、输入数据严谨性检查
+{chr(10).join(quality_lines) if quality_lines else '- 无质量检查信息'}
+
+## 三、定价结果对照
 {_summary_block(case1, 'Case 1 - IRS曲线 + bondPricer')}
 {_summary_block(case2, 'Case 2 - bondYieldCurveBuilder + bondPricer')}
 
-## 三、业务启示（模板）
+## 四、业务启示（模板）
 - 估值偏差集中在久期更长或票息特征更特殊的券种，可优先补充对应期限段曲线点或流动性修正。
 - 若 Case2（国债收益率曲线反推）较 Case1（IRS贴现曲线）偏差更小，说明同类券收益率曲线对该样本更匹配。
 - 若两案例均存在系统性高估/低估，优先排查：报价口径（净价/全价）、曲线频率、债券频率映射、定价日一致性。
 
-## 四、可视化输出
+## 五、可视化输出
 - Case1图: {case1_png.name if case1_png.exists() else '未生成（matplotlib不可用）'}
 - Case2图: {case2_png.name if case2_png.exists() else '未生成（matplotlib不可用）'}
 """

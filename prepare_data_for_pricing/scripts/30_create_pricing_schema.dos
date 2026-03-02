@@ -2,8 +2,6 @@
 // 用法（execute-dlang）：
 // uv run .github/skills/execute-dlang/scripts/ddb_runner/execute.py .github/skills/prepare_data_for_pricing/scripts/30_create_pricing_schema.dos --host 127.0.0.1 --port 8848 --user admin --password 123456
 
-login(`admin, `123456)
-
 dbPath = "dfs://data_pricing_skill"
 if(!existsDatabase(dbPath)){
     database(dbPath, VALUE, 2025.01.01..2027.12.31)

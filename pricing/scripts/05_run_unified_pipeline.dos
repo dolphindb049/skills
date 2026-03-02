@@ -4,11 +4,11 @@
 // - sourceMode="data_pricing_raw"：从 data_pricing 原始表生成输入
 
 // ===== USER CONFIG =====
-sourceMode = "instrument_db"            // "instrument_db" | "data_pricing_raw"
-sourceDbPath = "dfs://instrument_dbtest2" // instrument 库或 data_pricing 库
+sourceMode = "data_pricing_raw"            // "instrument_db" | "data_pricing_raw"
+sourceDbPath = "dfs://data_pricing_skill" // instrument 库或 data_pricing 库
 outDbPath = "dfs://bond_pricing_workflow_v2"
-pricingDate = 2025.08.18
-sampleSize = 120
+pricingDate = 2026.01.05
+sampleSize = 50
 
 instrumentTableName = "instrument"      // sourceMode=instrument_db 时使用
 rawBondTableName = "raw_bond_info"      // sourceMode=data_pricing_raw 时使用
@@ -21,11 +21,13 @@ curveFrequency = "Annual"
 
 // ===== HELPERS =====
 def mapFrequency(cpnFreqCD, couponTypeCD){
-    return iif(couponTypeCD=="ZERO", "Once",
-        iif(cpnFreqCD=="1PY", "Annual",
-            iif(cpnFreqCD=="2PY", "Semiannual",
-                iif(cpnFreqCD=="4PY", "Quarterly",
-                    iif(cpnFreqCD=="MAT", "Once", "Annual")
+    f = string(cpnFreqCD)
+    t = string(couponTypeCD)
+    return iif(t=="ZERO", "Once",
+        iif(f=="1PY", "Annual",
+            iif(f=="2PY", "Semiannual",
+                iif(f=="4PY", "Quarterly",
+                    iif(f=="MAT", "Once", "Annual")
                 )
             )
         )
@@ -50,7 +52,7 @@ def buildFromInstrumentDB(dbPath, tableName, pDate, n){
 
     norm = select instrumentId,
                   issuer,
-                  iif(couponTypeCD=="ZERO", "ZeroCouponBond", "FixedRateBond") as bondType,
+                  iif(string(couponTypeCD)=="ZERO", "ZeroCouponBond", "FixedRateBond") as bondType,
                   start,
                   maturity,
                   iif(isValid(par), double(par), 100.0) as issuePrice,
@@ -62,7 +64,11 @@ def buildFromInstrumentDB(dbPath, tableName, pDate, n){
            where start <= pDate
 
     s = select * from norm order by maturity asc
-    return s[0..(n-1)]
+    m = min(n, size(s))
+    if(m <= 0){
+        return s
+    }
+    return s[0..(m-1)]
 }
 
 def buildFromDataPricingRaw(dbPath, rawBondTable, pDate, n){
@@ -75,10 +81,10 @@ def buildFromDataPricingRaw(dbPath, rawBondTable, pDate, n){
                  coupon,
                  firstAccrDate as start,
                  maturityDate as maturity
-          from t
-          where couponTypeCD in ["FIXED","ZERO"], isValid(secID), isValid(start), isValid(maturity), maturity > pDate
+                    from t
+                        where couponTypeCD = "FIXED", isValid(secID), isValid(firstAccrDate), isValid(maturityDate), maturityDate > pDate
 
-    sampled = select first(instrumentId) as instrumentId,
+    sampled = select instrumentId,
                      first(issuer) as issuer,
                      first(couponTypeCD) as couponTypeCD,
                      first(cpnFreqCD) as cpnFreqCD,
@@ -89,7 +95,7 @@ def buildFromDataPricingRaw(dbPath, rawBondTable, pDate, n){
 
     norm = select instrumentId,
                   issuer,
-                  iif(couponTypeCD=="ZERO", "ZeroCouponBond", "FixedRateBond") as bondType,
+                  "FixedRateBond" as bondType,
                   start,
                   maturity,
                   100.0 as issuePrice,
@@ -101,32 +107,45 @@ def buildFromDataPricingRaw(dbPath, rawBondTable, pDate, n){
            where start <= pDate
 
     s = select * from norm order by maturity asc
-    return s[0..(n-1)]
+    m = min(n, size(s))
+    if(m <= 0){
+        return s
+    }
+    return s[0..(m-1)]
 }
 
 def makeInstrument(rowTb, i){
     d = dict(STRING, ANY)
     d["productType"] = "Cash"
     d["assetType"] = "Bond"
-    d["bondType"] = rowTb.bondType[i]
+    d["bondType"] = "FixedRateBond"
     d["version"] = 0
-    d["instrumentId"] = rowTb.instrumentId[i]
-    d["start"] = rowTb.start[i]
-    d["maturity"] = rowTb.maturity[i]
-    d["issuePrice"] = rowTb.issuePrice[i]
-    d["coupon"] = rowTb.coupon[i]
-    d["frequency"] = rowTb.frequency[i]
-    d["dayCountConvention"] = rowTb.dayCountConvention[i]
-    d["subType"] = rowTb.subType[i]
-    d["issuer"] = rowTb.issuer[i]
+    d["instrumentId"] = string(rowTb["instrumentId"][i])
+    d["start"] = rowTb["start"][i]
+    d["maturity"] = rowTb["maturity"][i]
+    d["issuePrice"] = rowTb["issuePrice"][i]
+    d["coupon"] = rowTb["coupon"][i]
+    d["frequency"] = string(rowTb["frequency"][i])
+    d["dayCountConvention"] = string(rowTb["dayCountConvention"][i])
+    d["currency"] = "CNY"
+    d["subType"] = string(rowTb["subType"][i])
+    d["issuer"] = string(rowTb["issuer"][i])
     return parseInstrument(d)
 }
 
 def buildCurveByMode(mode, srcDb, rawCurveTable, pDate, interpMethod, extrapMethod, compounding, frequency){
     if(mode=="data_pricing_raw"){
-        curveRaw = select curveDate, curveYield from loadTable(srcDb, rawCurveTable) where tradeDate = pDate order by curveDate
+        curveRaw = select curveDate,
+                         avg(curveYield) as curveYield
+                  from loadTable(srcDb, rawCurveTable)
+                  where tradeDate = pDate
+                  group by curveDate
+                  order by curveDate
         if(size(curveRaw)==0){
             throw "No curve rows in raw_irs_curve for pricingDate"
+        }
+        if(size(curveRaw)<4){
+            throw "Insufficient unique curve points in raw_irs_curve"
         }
         discountCurveDict = {
           "mktDataType": "Curve",

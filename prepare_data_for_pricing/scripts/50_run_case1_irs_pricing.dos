@@ -22,8 +22,17 @@ def freqMap(freqCD){
 }
 
 // 1) 构建贴现曲线对象（从 IRS 原始期限点）
-curveRaw = select * from loadTable(dbPath, "raw_irs_curve") where tradeDate = pricingDate
-curveRaw = select * from curveRaw order by curveDate
+curveRaw = select curveDate,
+                  first(curveName) as curveName,
+                  avg(curveYield) as curveYield
+           from loadTable(dbPath, "raw_irs_curve")
+           where tradeDate = pricingDate
+           group by curveDate
+           order by curveDate
+
+if(size(curveRaw) < 4){
+    throw "insufficient unique IRS curve points for case1"
+}
 
 curveDict = dict(STRING, ANY)
 curveDict["mktDataType"] = "Curve"
@@ -114,6 +123,9 @@ for(row in sampleTb){
     ))
 }
 
-loadTable(dbPath, "pricing_result_case1").append!(resultTb)
+resultStore = loadTable(dbPath, "pricing_result_case1")
+pDate = pricingDate
+delete from resultStore where pricingDate = pDate
+resultStore.append!(resultTb)
 
-select * from loadTable(dbPath, "pricing_result_case1") where pricingDate = pricingDate order by ticker
+select * from loadTable(dbPath, "pricing_result_case1") where pricingDate = pDate order by ticker

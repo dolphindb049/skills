@@ -22,6 +22,42 @@ def _curve_date(trade_date: pd.Timestamp, tenor: str) -> pd.Timestamp:
     return base
 
 
+def replace_by_dates(session, db_path: str, table_name: str, date_col: str, frame: pd.DataFrame) -> None:
+    if frame.empty or date_col not in frame.columns:
+        return
+    date_frame = pd.DataFrame({"d": pd.to_datetime(frame[date_col]).dt.date}).dropna().drop_duplicates()
+    if date_frame.empty:
+        return
+    session.upload({"tmp_replace_dates": date_frame})
+    session.run(
+        f'''
+t = loadTable("{db_path}", "{table_name}")
+dates = exec distinct date(d) from tmp_replace_dates
+for(x in dates){{
+    delete from t where {date_col} = x
+}}
+'''
+    )
+
+
+def replace_by_symbol_keys(session, db_path: str, table_name: str, key_col: str, frame: pd.DataFrame) -> None:
+    if frame.empty or key_col not in frame.columns:
+        return
+    key_frame = pd.DataFrame({"k": frame[key_col].astype(str)}).dropna().drop_duplicates()
+    if key_frame.empty:
+        return
+    session.upload({"tmp_replace_keys": key_frame})
+    session.run(
+        f'''
+t = loadTable("{db_path}", "{table_name}")
+keys = exec distinct symbol(string(k)) from tmp_replace_keys
+for(x in keys){{
+    delete from t where {key_col} = x
+}}
+'''
+    )
+
+
 def append_raw_bond_info(session, db_path: str, frame: pd.DataFrame) -> None:
     if frame.empty:
         return
@@ -174,6 +210,11 @@ def main() -> None:
     case2_basket = read_json_records(str(base_dir / "case2_bond_basket.json"))
 
     session = connect_ddb(config)
+    replace_by_symbol_keys(session, config.db_path, "raw_bond_info", "secID", raw_bond)
+    replace_by_dates(session, config.db_path, "raw_cfets_valuation", "tradeDate", raw_cfets)
+    replace_by_dates(session, config.db_path, "raw_irs_curve", "tradeDate", raw_curve)
+    replace_by_dates(session, config.db_path, "raw_ib_bond_market", "tradeDate", raw_market)
+    replace_by_dates(session, config.db_path, "case2_bond_basket", "tradeDate", case2_basket)
     append_raw_bond_info(session, config.db_path, raw_bond)
     append_raw_cfets(session, config.db_path, raw_cfets)
     append_raw_irs_curve(session, config.db_path, raw_curve)

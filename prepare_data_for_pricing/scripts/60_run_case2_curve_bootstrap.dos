@@ -21,8 +21,22 @@ def freqMap(freqCD){
            iif(freqCD=="12PY", "Monthly", "Annual"))))))
 }
 
-basket = select * from loadTable(dbPath, "case2_bond_basket")
-         where tradeDate = pricingDate and couponTypeCD = "FIXED"
+basketRaw = select * from loadTable(dbPath, "case2_bond_basket")
+            where tradeDate = pricingDate and couponTypeCD = "FIXED"
+
+basket = select first(secID) as secID,
+                first(ticker) as ticker,
+                first(secShortName) as secShortName,
+                first(firstAccrDate) as firstAccrDate,
+                maturityDate,
+                avg(coupon) as coupon,
+                first(cpnFreqCD) as cpnFreqCD,
+                first(couponTypeCD) as couponTypeCD,
+                first(typeName) as typeName,
+                avg(ytm) as ytm,
+                avg(netPx) as netPx
+         from basketRaw
+         group by maturityDate
          order by maturityDate
 
 if(size(basket) < 6){
@@ -113,6 +127,9 @@ for(row in basket){
     ))
 }
 
-loadTable(dbPath, "pricing_result_case2").append!(resultTb)
+resultStore = loadTable(dbPath, "pricing_result_case2")
+pDate = pricingDate
+delete from resultStore where pricingDate = pDate
+resultStore.append!(resultTb)
 
-select * from loadTable(dbPath, "pricing_result_case2") where pricingDate = pricingDate order by ticker
+select * from loadTable(dbPath, "pricing_result_case2") where pricingDate = pDate order by ticker

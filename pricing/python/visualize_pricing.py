@@ -101,14 +101,14 @@ def plot_external_compare(compare_df: pd.DataFrame, out_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize DolphinDB bond pricing outputs")
-    parser.add_argument("--host", default="192.168.100.43")
-    parser.add_argument("--port", type=int, default=8671)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8848)
     parser.add_argument("--user", default="admin")
     parser.add_argument("--password", default="123456")
     parser.add_argument("--db-path", default="dfs://bond_pricing_workflow_v2")
     parser.add_argument("--pricing-date", default="2025-08-18")
     parser.add_argument("--instrument-id", default="109400.XSHE")
-    parser.add_argument("--out-dir", default="./skills/pricing/python/output")
+    parser.add_argument("--out-dir", default=".github/skills/pricing/python/output")
     parser.add_argument("--result-table", default="pricing_result")
     parser.add_argument("--curve-table", default="pricing_curve_points")
     parser.add_argument("--risk-table", default="pricing_risk")
