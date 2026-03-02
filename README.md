@@ -7,6 +7,7 @@ This repository contains a collection of skills for DolphinDB development, deplo
 *   `DDBcoding/`: Tools for executing and debugging DolphinDB scripts (`.dos`).
 *   `ddb-rag/`: A RAG (Retrieval-Augmented Generation) system for searching DolphinDB documentation and tutorials.
 *   `ddb-deployment-skill/`: Guides and scripts for deploying DolphinDB.
+*   `data_pricing/`: End-to-end fixed-income pricing demo (UQER API -> DolphinDB DFS -> curve + bondPricer).
 
 ## Environment
 
@@ -25,3 +26,4 @@ Each skill has its own `SKILL.md` with specific usage instructions. Please refer
 *   [DDBcoding/SKILL.md](DDBcoding/SKILL.md)
 *   [ddb-rag/SKILL.md](ddb-rag/SKILL.md)
 *   [ddb-deployment-skill/SKILL.md](ddb-deployment-skill/SKILL.md)
+*   [data_pricing/SKILL.md](data_pricing/SKILL.md)
