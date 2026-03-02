@@ -1,0 +1,30 @@
+// 04_asset_pricing_detail.dos
+// 目标：按参数查看单资产的价格与风险结果
+
+// ===== USER CONFIG =====
+outDbPath = "dfs://bond_pricing_workflow_v2"
+pricingDate = 2025.08.18
+instrumentId = "109400.XSHE"
+
+priceTb = loadTable(outDbPath, "pricing_result")
+riskTb = loadTable(outDbPath, "pricing_risk")
+curveTb = loadTable(outDbPath, "pricing_curve_points")
+instTb = loadTable(outDbPath, "pricing_instrument_desc")
+
+pDate = pricingDate
+pId = instrumentId
+assetPrice = select * from priceTb where pricingDate = pDate, instrumentId = pId
+assetRisk = select * from riskTb where pricingDate = pDate, instrumentId = pId
+assetDesc = select * from instTb where pricingDate = pDate, instrumentId = pId
+curveView = select curveDate, discountYield, spreadYield from curveTb where pricingDate = pDate order by curveDate
+
+print("=== assetDesc ===")
+print(assetDesc)
+print("\n=== assetPrice ===")
+print(assetPrice)
+print("\n=== assetRisk ===")
+print(assetRisk)
+print("\n=== curveView ===")
+print(curveView)
+
+assetPrice
