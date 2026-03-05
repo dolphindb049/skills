@@ -1,8 +1,16 @@
-# .github/skills/prepare_data_for_pricing
+---
+name: ficc_download_data
+description: 提供从通联等API获取FICC定价所需基础数据，并将其导入到DolphinDB指定表中的完整流程。
+license: MIT
+metadata:
+  author: ddb-user
+  version: "1.0.0"
+  dependency: tonglian_api
+---
 
 ## 技能概述 / Overview
 
-此技能提供从优矿等API获取FICC定价所需基础数据，并将其导入到DolphinDB指定表中的完整流程。
+此技能提供从通联等API获取FICC定价所需基础数据，并将其导入到DolphinDB指定表中的完整流程。
 
 ## 核心流程 / Core Workflow
 

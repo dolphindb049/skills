@@ -1,4 +1,12 @@
-# .github/skills/pricing
+---
+name: ficc_pricing
+description: 构建 FICC 定价的 pipeline，从已经标准化的 instrument 和 MarketData 库表去生成最终的定价结果。
+license: MIT
+metadata:
+  author: ddb-user
+  version: "1.0.0"
+---
+
 
 ## 技能概述 / Overview
 
